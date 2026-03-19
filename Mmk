@@ -386,6 +386,7 @@ async def get_id(event):
     )
 
 # ================= AMBIL SEMUA ADMIN GRUP =================
+# ================= AMBIL SEMUA ADMIN GRUP CLICKABLE =================
 @kntl.on(events.NewMessage(pattern="^/ids$"))
 async def all_ids(event):
     chat_id = event.chat_id
@@ -409,15 +410,27 @@ async def all_ids(event):
         async for usr in kntl.iter_participants(chat_id):
             participant = getattr(usr, 'participant', None)
             if participant and (getattr(participant, 'admin_rights', None) or getattr(participant, 'creator', False)):
-                members.append(f"[{usr.first_name or '-'}](tg://user?id={usr.id}) — @{usr.username or '-'} — `{usr.id}`")
+                members.append({
+                    "name": usr.first_name or "-",
+                    "username": usr.username or "-",
+                    "id": usr.id
+                })
     except Exception as e:
         print(f"[ERROR] iter_participants: {e}")
         return await event.reply(f"Gagal ambil daftar admin: {e}")
 
     if members:
-        chunk_size = 50
+        # Format rapi dan clickable
+        chunk_size = 20
         for i in range(0, len(members), chunk_size):
-            await event.reply("\n".join(members[i:i+chunk_size]))
+            msg_lines = []
+            for idx, m in enumerate(members[i:i+chunk_size], start=i+1):
+                msg_lines.append(
+                    f"{idx}. Name     : {m['name']}\n"
+                    f"   Username : @{m['username']}\n"
+                    f"   User ID  : [Click to mention](tg://user?id={m['id']})"
+                )
+            await event.reply("\n\n".join(msg_lines), parse_mode="md")
     else:
         await event.reply("Tidak ada admin di grup ini.")
 
