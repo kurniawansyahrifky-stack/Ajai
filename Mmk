@@ -464,13 +464,14 @@ async def restore_db(event):
     await msg.download_media(mem_zip)
     mem_zip.seek(0)
 
-    # --- Tambahkan bagian ini ---
+    # Extract file JSON dari ZIP
+    missing_files = []
     with zipfile.ZipFile(mem_zip, 'r') as zf:
         for file in [USERS_FILE, GROUPS_FILE, USER_HISTORY_FILE]:
             try:
-                zf.extract(file)
+                zf.extract(file, path=".")  # pastikan extract di folder sekarang
             except KeyError:
-                pass
+                missing_files.append(file)
 
     # Reload database ke memory
     global started_users, admin_groups, user_history
@@ -478,8 +479,12 @@ async def restore_db(event):
     admin_groups = load_json(GROUPS_FILE)
     user_history = load_history(USER_HISTORY_FILE)
 
-    await event.reply("✅ Restore database berhasil!")
+    if missing_files:
+        await event.reply(f"⚠️ Beberapa file tidak ada di ZIP: {', '.join(missing_files)}\n✅ Restore yang lain berhasil!")
+    else:
+        await event.reply("✅ Restore database berhasil!")
 
+# ================= MAIN BOT =================
 async def main():
     # Kirim startup log
     await send_startup_log()
