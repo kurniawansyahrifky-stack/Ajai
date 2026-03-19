@@ -368,23 +368,6 @@ async def broadcast(event):
 
 # ================= CEK USER / REPLY =================
 @kntl.on(events.NewMessage(pattern="^/id$"))
-async def get_id(event):
-    if event.is_reply:
-        msg = await event.get_reply_message()
-        user = await msg.get_sender()
-    else:
-        user = await event.get_sender()
-
-    await update_user_history(user)
-
-    await event.reply(
-        f"**User Info:**\n"
-        f"• Nama: {user.first_name or '-'} {user.last_name or ''}\n"
-        f"• Username: @{user.username if getattr(user,'username',None) else '-'}\n"
-        f"• User ID: `{user.id}`\n"
-        f"• Is Bot: `{user.bot}`"
-    )
-
 @kntl.on(events.NewMessage(pattern="^/ids$"))
 async def all_ids(event):
     chat_id = event.chat_id
@@ -423,14 +406,13 @@ async def all_ids(event):
             msg_lines = []
             for idx, m in enumerate(members[i:i+chunk_size], start=i+1):
                 msg_lines.append(
-                    f"{idx}. Name     : {m['name']}\n"
-                    f"   Username : @{m['username']}\n"
-                    f"   User ID  : [Click to mention](tg://user?id={m['id']})"
+                    f"{idx}. Name     : [{m['name']}](tg://user?id={m['id']})\n"
+                    f"   Username : [@{m['username']}](tg://user?id={m['id']})\n"
+                    f"   User ID  : {m['id']}"
                 )
             await event.reply("\n\n".join(msg_lines), parse_mode="md")
     else:
         await event.reply("Tidak ada admin di grup ini.")
-
 # ================= CEK CHAT ID =================
 @kntl.on(events.NewMessage(pattern="^/idgc$"))
 async def group_id(event):
