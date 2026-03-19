@@ -466,6 +466,20 @@ async def restore_db(event):
 
     with zipfile.ZipFile(mem_zip, 'r') as
 
+with zipfile.ZipFile(mem_zip, 'r') as zf:
+    for file in [USERS_FILE, GROUPS_FILE, USER_HISTORY_FILE]:
+        try:
+            zf.extract(file)
+        except KeyError:
+            pass
+
+# Reload database ke memory
+started_users = load_json(USERS_FILE)
+admin_groups = load_json(GROUPS_FILE)
+user_history = load_history(USER_HISTORY_FILE)
+
+await event.reply("✅ Restore database berhasil!")
+
 async def main():
     # Kirim startup log
     await send_startup_log()
