@@ -30,8 +30,7 @@ EMOJIS = list("🎬 🪕 🎸 🎭")
 spam_chats = {}
 message_ids = {}
 OWNER_IDS = [8209644174, 6361374151]
-GROUP_LOGS = 'YOUR_LOGS_CHAT_ID'  # ganti dengan chat ID logs lo
-
+GROUP_LOGS = -1003790298786
 # ================= FILE DATABASE =================
 USERS_FILE = "users.json"
 GROUPS_FILE = "groups.json"
