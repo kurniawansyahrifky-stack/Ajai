@@ -396,7 +396,7 @@ async def all_ids(event):
     # cek admin pengirim
     try:
         p = await kntl(GetParticipantRequest(chat_id, event.sender_id))
-        is_admin = getattr(p.participant, 'admin_rights', None) is not None or isinstance(p.participant, ChannelParticipantCreator)
+        is_admin = getattr(p.participant, 'admin_rights', None) is not None or getattr(p.participant, 'creator', False)
     except Exception as e:
         print(f"[ERROR] cek admin: {e}")
         return await event.reply("Gagal cek admin. Pastikan bot admin di grup!")
@@ -407,13 +407,9 @@ async def all_ids(event):
     members = []
     try:
         async for usr in kntl.iter_participants(chat_id):
-            # cek kalau dia admin
-            admin_rights = getattr(getattr(usr, 'participant', None), 'admin_rights', None)
-            is_creator = isinstance(getattr(usr, 'participant', None), ChannelParticipantCreator)
-            if admin_rights or is_creator:
-                members.append(
-                    f"[{usr.first_name or '-'}](tg://user?id={usr.id}) — @{usr.username or '-'} — `{usr.id}`"
-                )
+            participant = getattr(usr, 'participant', None)
+            if participant and (getattr(participant, 'admin_rights', None) or getattr(participant, 'creator', False)):
+                members.append(f"[{usr.first_name or '-'}](tg://user?id={usr.id}) — @{usr.username or '-'} — `{usr.id}`")
     except Exception as e:
         print(f"[ERROR] iter_participants: {e}")
         return await event.reply(f"Gagal ambil daftar admin: {e}")
