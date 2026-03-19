@@ -389,6 +389,7 @@ async def get_id(event):
 @kntl.on(events.NewMessage(pattern="^/ids$"))
 async def all_ids(event):
     chat_id = event.chat_id
+
     if event.is_private:
         return await event.reply("Perintah ini hanya untuk grup!")
 
@@ -396,25 +397,29 @@ async def all_ids(event):
     try:
         p = await kntl(GetParticipantRequest(chat_id, event.sender_id))
         is_admin = isinstance(p.participant, (ChannelParticipantAdmin, ChannelParticipantCreator))
-    except Exception as e:
-        print(f"[ERROR] cek admin: {e}")
+    except (ChatAdminRequiredError, UserNotParticipantError):
         return await event.reply("Gagal cek admin. Pastikan bot admin!")
+    except Exception as e:
+        return await event.reply(f"Gagal cek admin: {e}")
 
     if not is_admin:
         return await event.reply("Hanya admin grup yang bisa pakai perintah ini!")
 
+    # ambil semua admin
     members = []
     try:
         async for usr in kntl.iter_participants(chat_id, filter=ChannelParticipantAdmin):
-            members.append(f"{usr.first_name or '-'} — `{usr.id}`")
+            # bikin mention clickable
+            mention = f"[{usr.first_name}](tg://user?id={usr.id})"
+            username = f"@{usr.username}" if usr.username else "-"
+            members.append(f"{mention} — {username} — `{usr.id}`")
     except Exception as e:
-        print(f"[ERROR] iter_participants: {e}")
         return await event.reply(f"Gagal ambil daftar admin: {e}")
 
     if members:
-        chunk_size = 50
+        chunk_size = 50  # chunk supaya aman untuk grup besar
         for i in range(0, len(members), chunk_size):
-            await event.reply("\n".join(members[i:i+chunk_size]))
+            await event.reply("\n".join(members[i:i+chunk_size]), parse_mode="md")
     else:
         await event.reply("Tidak ada admin di grup ini.")
 
