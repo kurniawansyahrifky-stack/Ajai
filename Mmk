@@ -7,7 +7,6 @@ import psutil
 import json
 import io
 import zipfile
-from telethon import events
 form telethon import Button, TelegramClient, events
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
