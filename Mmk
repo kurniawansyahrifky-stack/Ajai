@@ -338,6 +338,17 @@ async def durasi_handler(event):
     else:
         await progress_msg.edit(f"✅ Tagall selesai. Total user ditag: {total_users}")
 
+# ==== Pesan penutup tagall ====
+if spam_chats.get(chat_id):
+    selesai_msg = await kntl.send_message(
+        chat_id,
+        f"🐾 𝐆𝐀𝐑𝐅𝐈𝐄𝐋𝐃 𝐓𝐀𝐆𝐀𝐋𝐋 𝐁𝐎𝐓:\n"
+        f"✅ Tagall selesai sesuai durasi {key} menit.\n"
+        f"Total user ditag: {total_users}",
+        buttons=[[Button.inline("CLEAR TAGALL", b"clear_tagall")]]
+    )
+    message_ids.setdefault(chat_id, []).append(selesai_msg.id)
+
 # ================= STOP =================
 @kntl.on(events.CallbackQuery(data=b"stop_tagall"))
 async def stop(event):
