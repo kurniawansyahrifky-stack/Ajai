@@ -370,37 +370,6 @@ async def clear_tagall(event):
     await event.edit("✅ Semua pesan tagall & tombol sudah gua hapusin nyet!", buttons=[])
     await event.answer("Selesai hapus semua pesan tagall.", alert=True)
 
-# ================= STOP =================
-@kntl.on(events.CallbackQuery(data=b"stop_tagall"))
-async def stop(event):
-    chat_id = event.chat_id
-    spam_chats[chat_id] = False
-    await event.edit("STOP! Tagall dihentikan nih njink!! ✅", buttons=[[Button.inline("CLEAR TAGALL", b"clear_tagall")]])
-
-# ================= CLEAR =================
-@kntl.on(events.CallbackQuery(data=b"clear_tagall"))
-async def clear_tagall(event):
-    chat_id = event.chat_id
-    msgs = message_ids.get(chat_id, [])
-    if not msgs:
-        return await event.answer("Tidak ada pesan tagall yang tersisa.", alert=True)
-
-    batch_size = 50
-    for i in range(0, len(msgs), batch_size):
-        batch = msgs[i:i+batch_size]
-        try:
-            await kntl.delete_messages(chat_id, batch)
-        except:
-            pass
-        await asyncio.sleep(0.2)
-
-    message_ids[chat_id] = []
-    spam_chats[f"messages_{chat_id}"] = []
-    spam_chats[f"durasi_{chat_id}"] = False
-
-    await event.edit("✅ Semua pesan tagall & tombol sudah gua hapusin nyet!", buttons=[])
-    await event.answer("Selesai hapus semua pesan tagall.", alert=True)
-
 # ================= BROADCAST =================
 @kntl.on(events.NewMessage(pattern="^/broadcast (.+)"))
 async def broadcast(event):
