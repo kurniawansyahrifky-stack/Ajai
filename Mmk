@@ -138,24 +138,53 @@ async def help_handler(event):
     )
     await event.reply(help_msg)
 
-# ================= INFO =================
-@kntl.on(events.NewMessage(pattern="^/info$"))
+# ================= INFO USER NYATU =================
+@kntl.on(events.NewMessage(pattern=r"^/info(?:\s+(@?\w+))?"))
 async def info_handler(event):
-    if not user_history:
-        return await event.reply("Belum ada history user.")
+    username_input = event.pattern_match.group(1)
+    msg_text = event.raw_text
 
-    lines = []
-    for uid, data in user_history.items():
-        lines.append(
-            f"{data.get('first_name','-')} {data.get('last_name','')}\n"
-            f"Username: @{data.get('username','-')}\n"
-            f"User ID: `{uid}`\n"
-            f"Is Bot: `{data.get('is_bot')}`\n"
-            "-------------------"
-        )
-    chunk_size = 5
-    for i in range(0, len(lines), chunk_size):
-        await event.reply("\n".join(lines[i:i+chunk_size]))
+    # Mode reply
+    if event.is_reply:
+        msg = await event.get_reply_message()
+        user = await msg.get_sender()
+        await update_user_history(user, msg_text=f"Replied: {msg.raw_text}")
+    # Mode username
+    elif username_input:
+        if username_input.startswith("@"):
+            username_input = username_input[1:]
+        try:
+            user = await kntl.get_entity(username_input)
+            await update_user_history(user, msg_text=f"/info {username_input}")
+        except Exception:
+            return await event.reply(f"⚠️ User @{username_input} tidak ditemukan.")
+    else:
+        user = await event.get_sender()
+        await update_user_history(user, msg_text=msg_text)
+
+    uid = str(user.id)
+    data = user_history.get(uid, {})
+
+    # History names & usernames
+    names_lines = []
+    usernames_lines = []
+    for idx, ev in enumerate(data.get("history", []), 1):
+        text = ev.get("text", "")
+        ts = ev.get("time", "-")
+        # cek apakah ada username di teks
+        if "@" in text:
+            usernames_lines.append(f"{idx}. [{ts}] {text}")
+        else:
+            names_lines.append(f"{idx}. [{ts}] {text}")
+
+    # Build message
+    msg_out = f"✅ 👤 History for {uid}\n"
+    if names_lines:
+        msg_out += "Names\n" + "\n".join(names_lines) + "\n"
+    if usernames_lines:
+        msg_out += "Usernames\n" + "\n".join(usernames_lines)
+
+    await event.reply(msg_out)
 
 # ================= BOT DITAMBAH KE GRUP =================
 @kntl.on(events.ChatAction())
