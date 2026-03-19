@@ -367,7 +367,6 @@ async def broadcast(event):
     await event.reply("✅ Broadcast selesai!")
 
 # ================= CEK USER / REPLY =================
-@kntl.on(events.NewMessage(pattern="^/id$"))
 @kntl.on(events.NewMessage(pattern="^/ids$"))
 async def all_ids(event):
     chat_id = event.chat_id
@@ -413,6 +412,7 @@ async def all_ids(event):
             await event.reply("\n\n".join(msg_lines), parse_mode="md")
     else:
         await event.reply("Tidak ada admin di grup ini.")
+
 # ================= CEK CHAT ID =================
 @kntl.on(events.NewMessage(pattern="^/idgc$"))
 async def group_id(event):
