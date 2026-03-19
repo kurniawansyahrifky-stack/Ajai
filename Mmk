@@ -207,6 +207,7 @@ async def info_handler(event):
         msg_out += "Usernames\n" + "\n".join(usernames_lines)
 
     await event.reply(msg_out)
+
 # ================= BOT DITAMBAH KE GRUP =================
 @kntl.on(events.ChatAction())
 async def chat_added(event):
