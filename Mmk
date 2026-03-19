@@ -206,7 +206,7 @@ async def ping(event):
     await msg.edit(text, file=banner)
 
 # ================= TAGALL =================
-        async def send_batch(chat_id, msg, user_list, emoji_list, mode, progress_msg=None, total_users=None):
+async def send_batch(chat_id, msg, user_list, emoji_list, mode, progress_msg=None, total_users=None):
     full_msg = f"{msg}\n\n{' '.join(user_list)}\n{' '.join(emoji_list)}\n\n🛍 my store @storegarf"
     if mode == "tempel":
         sent_msg = await kntl.send_message(chat_id, full_msg, buttons=[[Button.inline("STOP", b"stop_tagall")]])
