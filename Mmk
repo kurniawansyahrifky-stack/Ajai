@@ -385,8 +385,6 @@ async def get_id(event):
         f"• Is Bot: `{user.bot}`"
     )
 
-# ================= AMBIL SEMUA ADMIN GRUP =================
-# ================= AMBIL SEMUA ADMIN GRUP CLICKABLE =================
 @kntl.on(events.NewMessage(pattern="^/ids$"))
 async def all_ids(event):
     chat_id = event.chat_id
@@ -420,7 +418,6 @@ async def all_ids(event):
         return await event.reply(f"Gagal ambil daftar admin: {e}")
 
     if members:
-        # Format rapi dan clickable
         chunk_size = 20
         for i in range(0, len(members), chunk_size):
             msg_lines = []
