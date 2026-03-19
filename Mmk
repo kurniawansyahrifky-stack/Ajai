@@ -138,18 +138,17 @@ async def help_handler(event):
     )
     await event.reply(help_msg)
 
-# ================= INFO USER LANGSUNG =================
+# ================= INFO USER TARGET =================
 @kntl.on(events.NewMessage(pattern=r"^/info(?:\s+(@?\w+))?"))
 async def info_handler(event):
     username_input = event.pattern_match.group(1)
-    msg_text = event.raw_text  # optional kalau mau simpan history
 
     # Mode reply: ambil user dari message yang direply
     if event.is_reply:
         msg = await event.get_reply_message()
         user = await msg.get_sender()
 
-    # Mode username: ambil user langsung dari Telegram
+    # Mode username: ambil user dari username yang diketik
     elif username_input:
         if username_input.startswith("@"):
             username_input = username_input[1:]
@@ -162,11 +161,7 @@ async def info_handler(event):
     else:
         user = await event.get_sender()
 
-    # Optional: simpan history user (dummy atau log)
-    if 'user_history' in globals():  # kalau kamu pakai dict user_history
-        await update_user_history(user, msg_text=msg_text)
-
-    # Bikin dummy "history" dari info Telegram
+    # Bikin "history" dummy dari info Telegram target saja
     uid = str(user.id)
     names_lines = [f"1. [{event.date.strftime('%d/%m/%y %H:%M:%S')}] {user.first_name or '-'}"]
     usernames_lines = [f"1. [{event.date.strftime('%d/%m/%y %H:%M:%S')}] @{user.username or '-'}"]
@@ -183,6 +178,7 @@ async def info_handler(event):
     )
 
     await event.reply(msg_out)
+
 # ================= PING =================
 @kntl.on(events.NewMessage(pattern="^/ping$"))
 async def ping(event):
