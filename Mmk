@@ -7,7 +7,8 @@ import psutil
 import json
 import io
 import zipfile
-from telethon import Button, TelegramClient, events
+from telethon import events
+form telethon import Button, TelegramClient, events
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from telethon.errors import UserNotParticipantError, ChatAdminRequiredError
@@ -138,40 +139,46 @@ async def help_handler(event):
     )
     await event.reply(help_msg)
 
-# ================= INFO USER NYATU =================
+# ================= INFO USER LANGSUNG =================
 @kntl.on(events.NewMessage(pattern=r"^/info(?:\s+(@?\w+))?"))
 async def info_handler(event):
     username_input = event.pattern_match.group(1)
-    msg_text = event.raw_text
 
-    # ================= Mode reply =================
+    # Mode reply: ambil user dari message yang direply
     if event.is_reply:
         msg = await event.get_reply_message()
         user = await msg.get_sender()
-        await update_user_history(user, msg_text=f"Replied: {msg.raw_text}")
 
-    # ================= Mode username =================
+    # Mode username: ambil user langsung dari Telegram
     elif username_input:
         if username_input.startswith("@"):
             username_input = username_input[1:]
+        try:
+            user = await kntl.get_entity(username_input)
+        except Exception:
+            return await event.reply(f"⚠️ User @{username_input} tidak ditemukan di Telegram.")
 
-        # Cari di user_history saja
-        found_uid = None
-        for uid, data in user_history.items():
-            if data.get("username", "").lower() == username_input.lower():
-                found_uid = uid
-                break
+    # Default: ambil sender sendiri
+    else:
+        user = await event.get_sender()
 
-        if found_uid:
-            # Buat objek dummy supaya mirip user asli
-            user = type("User", (), {})()
-            user.id = int(found_uid)
-            user.first_name = user_history[found_uid].get("first_name", "-")
-            user.last_name = user_history[found_uid].get("last_name", "")
-            user.username = user_history[found_uid].get("username", "-")
-            user.bot = user_history[found_uid].get("is_bot", False)
-        else:
-            return await event.reply(f"⚠️ User @{username_input} tidak ditemukan di history.")
+    # Bikin dummy "history" dari info Telegram
+    uid = str(user.id)
+    names_lines = [f"1. [{event.date.strftime('%d/%m/%y %H:%M:%S')}] {user.first_name or '-'}"]
+    usernames_lines = [f"1. [{event.date.strftime('%d/%m/%y %H:%M:%S')}] @{user.username or '-'}"]
+
+    # Format output
+    msg_out = (
+        f"✅ 👤 History for {uid}\n"
+        f"Nama: {user.first_name or '-'} {user.last_name or ''}\n"
+        f"Username: @{user.username or '-'}\n"
+        f"User ID: {uid}\n"
+        f"Is Bot: {user.bot}\n\n"
+        "Names\n" + "\n".join(names_lines) + "\n\n"
+        "Usernames\n" + "\n".join(usernames_lines)
+    )
+
+    await event.reply(msg_out)
 
     # ================= Default ke sender =================
     else:
