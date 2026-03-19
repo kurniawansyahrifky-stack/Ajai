@@ -330,7 +330,7 @@ async def durasi_handler(event):
     if user_lines and spam_chats.get(chat_id):
         await send_batch(chat_id, msg, user_lines, emoji_lines, mode, progress_msg, total_users)
 
-    # Pesan akhir
+    # ================= PESAN AKHIR PROGRESS =================
     if durasi and (time.time() - start_time) >= durasi:
         await progress_msg.edit(f"✅ Tagall selesai sesuai durasi {key} menit. Total user ditag: {total_users}")
     elif max_users and total_users >= max_users:
@@ -338,14 +338,13 @@ async def durasi_handler(event):
     else:
         await progress_msg.edit(f"✅ Tagall selesai. Total user ditag: {total_users}")
 
-# ==== Pesan penutup tagall ====
-if spam_chats.get(chat_id):
+    # =============== PESAN PENUTUP DENGAN CLEAR ===============
     selesai_msg = await kntl.send_message(
         chat_id,
         f"🐾 𝐆𝐀𝐑𝐅𝐈𝐄𝐋𝐃 𝐓𝐀𝐆𝐀𝐋𝐋 𝐁𝐎𝐓:\n"
         f"✅ Tagall selesai sesuai durasi {key} menit.\n"
         f"Total user ditag: {total_users}",
-        buttons=[[Button.inline("CLEAR TAGALL", b"clear_tagall")]]
+        buttons=[[Button.inline("🧹 CLEAR TAGALL", b"clear_tagall")]]
     )
     message_ids.setdefault(chat_id, []).append(selesai_msg.id)
 
