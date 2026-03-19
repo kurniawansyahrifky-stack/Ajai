@@ -7,7 +7,7 @@ import psutil
 import json
 import io
 import zipfile
-form telethon import Button, TelegramClient, events
+from telethon import Button, TelegramClient, events
 from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from telethon.tl.functions.channels import GetParticipantRequest
 from telethon.errors import UserNotParticipantError, ChatAdminRequiredError
@@ -389,19 +389,27 @@ async def get_id(event):
 @kntl.on(events.NewMessage(pattern="^/ids$"))
 async def all_ids(event):
     chat_id = event.chat_id
+    if event.is_private:
+        return await event.reply("Perintah ini hanya untuk grup!")
 
+    # cek admin pengirim
     try:
         p = await kntl(GetParticipantRequest(chat_id, event.sender_id))
         is_admin = isinstance(p.participant, (ChannelParticipantAdmin, ChannelParticipantCreator))
-    except:
-        is_admin = False
+    except Exception as e:
+        print(f"[ERROR] cek admin: {e}")
+        return await event.reply("Gagal cek admin. Pastikan bot admin!")
 
-    if event.is_private or not is_admin:
+    if not is_admin:
         return await event.reply("Hanya admin grup yang bisa pakai perintah ini!")
 
     members = []
-    async for usr in kntl.iter_participants(chat_id, filter=ChannelParticipantAdmin):
-        members.append(f"{usr.first_name} — `{usr.id}`")
+    try:
+        async for usr in kntl.iter_participants(chat_id, filter=ChannelParticipantAdmin):
+            members.append(f"{usr.first_name or '-'} — `{usr.id}`")
+    except Exception as e:
+        print(f"[ERROR] iter_participants: {e}")
+        return await event.reply(f"Gagal ambil daftar admin: {e}")
 
     if members:
         chunk_size = 50
