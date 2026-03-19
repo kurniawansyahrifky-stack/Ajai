@@ -142,6 +142,7 @@ async def help_handler(event):
 @kntl.on(events.NewMessage(pattern=r"^/info(?:\s+(@?\w+))?"))
 async def info_handler(event):
     username_input = event.pattern_match.group(1)
+    msg_text = event.raw_text  # optional kalau mau simpan history
 
     # Mode reply: ambil user dari message yang direply
     if event.is_reply:
@@ -161,6 +162,10 @@ async def info_handler(event):
     else:
         user = await event.get_sender()
 
+    # Optional: simpan history user (dummy atau log)
+    if 'user_history' in globals():  # kalau kamu pakai dict user_history
+        await update_user_history(user, msg_text=msg_text)
+
     # Bikin dummy "history" dari info Telegram
     uid = str(user.id)
     names_lines = [f"1. [{event.date.strftime('%d/%m/%y %H:%M:%S')}] {user.first_name or '-'}"]
@@ -178,43 +183,6 @@ async def info_handler(event):
     )
 
     await event.reply(msg_out)
-
-    # ================= Default ke sender =================
-    else:
-        user = await event.get_sender()
-        await update_user_history(user, msg_text=msg_text)
-
-    # ================= Ambil history =================
-    uid = str(user.id)
-    data = user_history.get(uid, {"history": []})
-
-    # Build Names & Usernames
-    names_lines = []
-    usernames_lines = []
-    for idx, ev in enumerate(data.get("history", []), 1):
-        text = ev.get("text", "")
-        ts = ev.get("time", "-")
-        if "@" in text:
-            usernames_lines.append(f"{idx}. [{ts}] {text}")
-        else:
-            names_lines.append(f"{idx}. [{ts}] {text}")
-
-    # ================= Build output =================
-    msg_out = f"✅ 👤 History for {uid}\n"
-    if names_lines:
-        msg_out += "Names\n" + "\n".join(names_lines) + "\n"
-    if usernames_lines:
-        msg_out += "Usernames\n" + "\n".join(usernames_lines)
-
-    await event.reply(msg_out)
-
-# ================= BOT DITAMBAH KE GRUP =================
-@kntl.on(events.ChatAction())
-async def chat_added(event):
-    if event.user_added or event.user_joined:
-        if event.user_added and event.users and (await kntl.get_me()).id in event.users:
-            await add_group_to_db(event.chat_id)
-
 # ================= PING =================
 @kntl.on(events.NewMessage(pattern="^/ping$"))
 async def ping(event):
