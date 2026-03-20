@@ -1,0 +1,209 @@
+import asyncio
+import json
+import time
+import os
+import zipfile
+import random
+from telethon import TelegramClient, events, Button
+from telethon.errors import FloodWaitError
+from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.types import ChannelParticipantsRecent
+
+# ===== CONFIG =====
+API_ID = 33370509
+API_HASH = "ISI_API_HASH_LO"
+BOT_TOKEN = "ISI_BOT_TOKEN_LO"
+OWNER_ID = 8209644174
+
+LOG_GROUP = -1003812690414
+
+BATCH_SIZE = 3
+WORKERS = 3
+DELAY_MIN = 0.7
+DELAY_MAX = 1.2
+MAX_MSG_LEN = 3500
+
+client = TelegramClient("bot", API_ID, API_HASH)
+
+# ===== DATABASE =====
+DB_FILE = "data.json"
+
+if not os.path.exists(DB_FILE):
+    with open(DB_FILE, "w") as f:
+        json.dump({"partners": {}, "groups": [], "status": True}, f)
+
+def load_db():
+    with open(DB_FILE) as f:
+        return json.load(f)
+
+def save_db(data):
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+# ===== SAFE SEND =====
+async def safe_send(chat_id, text, buttons=None):
+    while True:
+        try:
+            return await client.send_message(chat_id, text, buttons=buttons)
+        except FloodWaitError as e:
+            await asyncio.sleep(min(e.seconds, 10))
+        except:
+            await asyncio.sleep(1)
+
+# ===== START COMMAND =====
+@client.on(events.NewMessage(pattern="/start"))
+async def start(event):
+    await event.reply(
+        "🚀 BOT TAGALL AKTIF\n\n"
+        "Kirim link partner untuk mulai.\n"
+        "Owner gunakan /help",
+        buttons=[
+            [Button.inline("📊 STATUS", b"status")]
+        ]
+    )
+
+# ===== HELP OWNER =====
+@client.on(events.NewMessage(pattern="/help"))
+async def help_cmd(event):
+    if event.sender_id != OWNER_ID:
+        return
+
+    await event.reply(
+        "⚙️ OWNER MENU\n\n"
+        "/addpartner link\n"
+        "/addgroup id\n"
+        "/on /off\n"
+        "/backup\n"
+        "/ping"
+    )
+
+# ===== PING =====
+@client.on(events.NewMessage(pattern="/ping"))
+async def ping(event):
+    if event.sender_id == OWNER_ID:
+        await event.reply("🏓 BOT HIDUP")
+
+# ===== ADD PARTNER =====
+@client.on(events.NewMessage(pattern="/addpartner (.*)"))
+async def add_partner(event):
+    if event.sender_id != OWNER_ID:
+        return
+
+    db = load_db()
+    link = event.pattern_match.group(1)
+
+    db["partners"][link] = {"last": 0, "durasi": 300}
+    save_db(db)
+
+    await event.reply("✅ Partner ditambah")
+
+# ===== ADD GROUP =====
+@client.on(events.NewMessage(pattern="/addgroup (.*)"))
+async def add_group(event):
+    if event.sender_id != OWNER_ID:
+        return
+
+    db = load_db()
+    gid = int(event.pattern_match.group(1))
+
+    if gid not in db["groups"]:
+        db["groups"].append(gid)
+        save_db(db)
+
+    await event.reply("✅ Group ditambah")
+
+# ===== ON OFF =====
+@client.on(events.NewMessage(pattern="/on"))
+async def on_bot(event):
+    if event.sender_id != OWNER_ID:
+        return
+    db = load_db()
+    db["status"] = True
+    save_db(db)
+    await event.reply("✅ BOT ON")
+
+@client.on(events.NewMessage(pattern="/off"))
+async def off_bot(event):
+    if event.sender_id != OWNER_ID:
+        return
+    db = load_db()
+    db["status"] = False
+    save_db(db)
+    await event.reply("⛔ BOT OFF")
+
+# ===== GET USERS =====
+async def get_users(chat_id):
+    users = []
+    offset = 0
+
+    while True:
+        participants = await client(GetParticipantsRequest(
+            chat_id,
+            ChannelParticipantsRecent(),
+            offset,
+            100,
+            hash=0
+        ))
+
+        if not participants.users:
+            break
+
+        for u in participants.users:
+            if not u.bot and u.first_name:
+                users.append(f"[{u.first_name}](tg://user?id={u.id})")
+
+        offset += len(participants.users)
+
+    return users
+
+# ===== TAGALL =====
+async def start_tagall(event, partner):
+    db = load_db()
+    all_users = []
+
+    await client.send_message(LOG_GROUP, f"🚀 START TAGALL\n{partner}")
+
+    for group in db["groups"]:
+        users = await get_users(group)
+        all_users.extend(users)
+
+        text = f"🔥 PROMO\n\n{partner}\n\n"
+
+        for u in users:
+            await safe_send(group, text + u)
+            await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
+
+    await client.send_message(LOG_GROUP, f"✅ DONE {len(all_users)} USER")
+
+# ===== REQUEST =====
+@client.on(events.NewMessage(pattern="https://t.me/.*"))
+async def request(event):
+    db = load_db()
+
+    if not db["status"]:
+        return await event.reply("❌ BOT OFF")
+
+    link = event.raw_text.strip()
+
+    if link not in db["partners"]:
+        return await event.reply("❌ BUKAN PARTNER")
+
+    await event.reply("🚀 PROSES TAGALL...")
+    await start_tagall(event, link)
+
+# ===== MAIN =====
+async def main():
+    await client.start(bot_token=BOT_TOKEN)
+
+    print("BOT RUNNING...")
+
+    # LOG KE GROUP
+    await client.send_message(
+        LOG_GROUP,
+        "✅ BOT ONLINE\nSYSTEMD AKTIF"
+    )
+
+    await client.run_until_disconnected()
+
+if __name__ == "__main__":
+    asyncio.run(main())
