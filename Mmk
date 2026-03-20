@@ -382,25 +382,37 @@ async def clear_tagall(event):
     await event.edit("✅ Semua pesan tagall & tombol sudah gua hapusin nyet!", buttons=[])
     await event.answer("Selesai hapus semua pesan tagall.", alert=True)
 
-# =============== BROADCAST FULL MEDIA (TELETHON 1.42.0) ===============
+# =============== BROADCAST FULL MEDIA (USER + GROUP ADMIN) ===============
 
 broadcast_running = False
 MAX_CONCURRENT = 10
 UPDATE_INTERVAL = 2
 
 
+# ========= AMBIL LIST GRUP ADMIN =========
+async def get_admin_groups():
+    admin_groups = set()
+    async for dialog in kntl.iter_dialogs():
+        if dialog.is_group or dialog.is_channel:
+            try:
+                p = await kntl.get_permissions(dialog.id, 'me')
+                if p.is_admin:
+                    admin_groups.add(dialog.id)
+            except:
+                pass
+    return admin_groups
+
+
+# ========= KIRIM PESAN SINGLE =========
 async def send_single_safe(client, msg, target_id):
-    """Kirim 1 pesan: teks, foto, video, stiker, dokumen, voice"""
     try:
         if msg.media:
-            # kirim media: foto, video, dokumen, stiker, dll
             await client.send_file(
                 target_id,
                 msg.media,
                 caption=msg.message or ""
             )
         else:
-            # pesan teks
             await client.send_message(target_id, msg.message or "")
 
         return True, None
@@ -408,11 +420,10 @@ async def send_single_safe(client, msg, target_id):
         return False, str(e)
 
 
+# ========= KIRIM ALBUM =========
 async def send_album_safe(client, album_list, target_id):
-    """Kirim album (media group)"""
     try:
         media_files = []
-
         for msg in album_list:
             path = await msg.download_media()
             media_files.append(path)
@@ -423,12 +434,12 @@ async def send_album_safe(client, album_list, target_id):
             caption=album_list[0].message or "",
             force_document=False
         )
-
         return True, None
     except Exception as e:
         return False, str(e)
 
 
+# ========= COMMAND /broadcast =========
 @kntl.on(events.NewMessage(pattern=r"^/broadcast(?: (.+))?$"))
 async def start_broadcast(event):
     global broadcast_running
@@ -442,11 +453,8 @@ async def start_broadcast(event):
     broadcast_running = True
     arg = event.pattern_match.group(1)
 
-    # ============================
-    # Ambil pesan sumber
-    # ============================
+    # ambil sumber pesan
     if arg:
-        # mode /broadcast teks tanpa reply
         class FakeMsg:
             media = None
             message = arg
@@ -462,18 +470,17 @@ async def start_broadcast(event):
         reply = await event.get_reply_message()
 
         if reply.grouped_id:
-            # pesan adalah album
-            msgs = await kntl.get_messages(reply.chat_id, ids=range(reply.id - 10, reply.id + 10))
+            msgs = await kntl.get_messages(reply.chat_id, ids=range(reply.id - 20, reply.id + 20))
             album = sorted([m for m in msgs if m.grouped_id == reply.grouped_id], key=lambda x: x.id)
             source_msg = None
         else:
             album = None
             source_msg = reply
 
-    # ============================
-    # Target user
-    # ============================
-    targets = set(started_users) | set(admin_groups)
+    # ========= TARGET = USER START + GRUP ADMIN =========
+    admin_groups = await get_admin_groups()
+
+    targets = set(started_users) | admin_groups
     total = len(targets)
 
     progress = await event.reply(
@@ -507,9 +514,7 @@ async def start_broadcast(event):
     tasks = [worker(uid) for uid in targets]
     last_update = time.time()
 
-    # ============================
-    # Update progress
-    # ============================
+    # update progress
     for task in asyncio.as_completed(tasks):
         await task
 
