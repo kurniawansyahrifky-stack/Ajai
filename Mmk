@@ -382,117 +382,157 @@ async def clear_tagall(event):
     await event.edit("✅ Semua pesan tagall & tombol sudah gua hapusin nyet!", buttons=[])
     await event.answer("Selesai hapus semua pesan tagall.", alert=True)
 
-# ================= BROADCAST =================
-# ================= BROADCAST =================
+# =============== BROADCAST FULL MEDIA ===============
 
 broadcast_running = False
+MAX_CONCURRENT = 10
+UPDATE_INTERVAL = 2
 
-MAX_CONCURRENT = 10      # jumlah pengiriman sekaligus
-UPDATE_INTERVAL = 2      # update progress tiap detik
 
-
-# --- fungsi kirim satu pesan ---
-async def send_single(kntl, user_id, message):
+async def send_album_safe(client, source_msgs, target_id):
+    """mengirim album media_group secara aman"""
     try:
-        await message.copy_to(user_id)   # <<< FIX PENTING
-        return 200, None
+        media_list = []
+        for msg in source_msgs:
+            if msg.photo:
+                media_list.append(await msg.download_media())
+            elif msg.document:
+                media_list.append(await msg.download_media())
+            else:
+                return False, "Media group contains unsupported item"
+
+        await client.send_file(target_id, media_list, caption=source_msgs[0].message)
+        return True, None
+
     except Exception as e:
-        return 400, str(e)
+        return False, str(e)
 
 
-# --- trigger /broadcast ---
-@kntl.on(events.NewMessage(pattern="^/broadcast$", func=lambda e: e.is_reply))
+async def send_single_safe(client, msg, target_id):
+    """mengirim 1 pesan normal (foto/video/stiker/teks/dokumen)"""
+    try:
+        await msg.copy_to(target_id)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+@kntl.on(events.NewMessage(pattern=r"^/broadcast(?: (.+))?$"))
 async def start_broadcast(event):
     global broadcast_running
 
     if event.sender_id not in OWNER_IDS:
-        return await event.reply("Lu siapa anjg? Command ini cuma buat owner.")
+        return await event.reply("Lu siapa anjg? Command owner only.")
 
     if broadcast_running:
         return await event.reply("⚠️ Broadcast sedang berjalan, tunggu selesai.")
 
     broadcast_running = True
-    broadcast_msg = event.reply_to_message
+    arg = event.pattern_match.group(1)
 
-    # target user
-    targets = set(started_users) | set(admin_groups)   # <<< FIX PENTING
+    # ===== Ambil pesan untuk dikirim =====
+    if arg:
+        # Mode /broadcast teks
+        class FakeMsg:
+            async def copy_to(self, target_id):
+                await kntl.send_message(target_id, arg)
+
+        source_msg = FakeMsg()
+        album = None
+
+    else:
+        if not event.is_reply:
+            broadcast_running = False
+            return await event.reply("Reply pesan atau tambah teks setelah /broadcast")
+
+        reply = await event.get_reply_message()
+
+        # DETEKSI ALBUM
+        if reply.grouped_id:
+            all_msgs = await kntl.get_messages(
+                reply.chat_id,
+                ids=list(range(reply.id - 10, reply.id + 10))
+            )
+
+            album = [m for m in all_msgs if m.grouped_id == reply.grouped_id]
+            album = sorted(album, key=lambda x: x.id)
+            source_msg = None
+        else:
+            album = None
+            source_msg = reply
+
+    # TARGET BROADCAST
+    targets = set(started_users) | set(admin_groups)
     total = len(targets)
 
     progress = await event.reply(
-        f"📢 Broadcast Started...\n"
-        f"Total Target: {total}\n"
-        f"Completed: 0 (0%)\n"
+        f"📣 Broadcast Started\n"
+        f"Total target: {total}\n"
+        f"Completed: 0\n"
         f"Success: 0\n"
-        f"Failed: 0\n"
-        f"Elapsed: 0s"
+        f"Failed: 0"
     )
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     start_time = time.time()
 
-    done = 0
-    success = 0
-    failed = 0
+    done = success = failed = 0
+    log = await aiofiles.open("broadcast_log.txt", "w")
 
-    async def worker(user_id):
+    async def worker(uid):
         nonlocal done, success, failed
 
         async with semaphore:
-            sts, msg = await send_single(kntl, user_id, broadcast_msg)
+            if album:
+                ok, err = await send_album_safe(kntl, album, uid)
+            else:
+                ok, err = await send_single_safe(kntl, source_msg, uid)
+
             done += 1
 
-            if sts == 200:
+            if ok:
                 success += 1
             else:
                 failed += 1
+                await log.write(f"{uid} : {err}\n")
 
-            return sts, msg, user_id
+    last_update = time.time()
+    tasks = [worker(uid) for uid in targets]
 
-    # log file
-    async with aiofiles.open("broadcast.txt", "w") as log:
-        tasks = [worker(uid) for uid in targets]
-        last_update = time.time()
+    for task in asyncio.as_completed(tasks):
+        await task
 
-        for task in asyncio.as_completed(tasks):
-            sts, msg, uid = await task
+        now = time.time()
+        if now - last_update >= UPDATE_INTERVAL:
+            try:
+                await progress.edit(
+                    f"📣 Broadcast Progress\n"
+                    f"Total: {total}\n"
+                    f"Completed: {done}\n"
+                    f"Success: {success}\n"
+                    f"Failed: {failed}"
+                )
+            except:
+                pass
+            last_update = now
 
-            if msg:
-                await log.write(f"{uid} : {msg}\n")
-
-            # update progress
-            now = time.time()
-            if now - last_update >= UPDATE_INTERVAL:
-                elapsed = int(now - start_time)
-                try:
-                    await progress.edit(
-                        f"📢 Broadcast Progress...\n"
-                        f"Total: {total}\n"
-                        f"Completed: {done} ({(done/total)*100:.1f}%)\n"
-                        f"Success: {success}\n"
-                        f"Failed: {failed}\n"
-                        f"Elapsed: {elapsed}s"
-                    )
-                except:
-                    pass
-
-                last_update = now
-
-    # selesai
+    await log.close()
     broadcast_running = False
+
     elapsed = int(time.time() - start_time)
 
     if failed == 0:
         await progress.edit(
-            f"✅ Broadcast Completed in {elapsed}s\n\n"
+            f"✅ Broadcast Completed in {elapsed}s\n"
             f"Total: {total}\n"
             f"Success: {success}\n"
             f"Failed: {failed}"
         )
     else:
         await event.reply(
-            file="broadcast.txt",
+            file="broadcast_log.txt",
             message=(
-                f"✅ Broadcast Completed in {elapsed}s\n\n"
+                f"✅ Broadcast Completed in {elapsed}s\n"
                 f"Total: {total}\n"
                 f"Success: {success}\n"
                 f"Failed: {failed}"
