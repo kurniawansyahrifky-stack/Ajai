@@ -227,8 +227,8 @@ async def ping(event):
 # CONFIG
 BATCH_SIZE = 3
 DELAY_MIN = 0.7
-DELAY_MAX = 1.2
-WORKERS = 7
+DELAY_MAX = 1.4
+WORKERS = 4
 MAX_MSG_LEN = 3500
 
 WAJIB_JOIN_CHANNEL = "storegarf"
