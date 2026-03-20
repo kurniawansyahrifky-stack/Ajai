@@ -137,7 +137,15 @@ async def help_handler(event):
         "/ids — Ambil semua ID admin grup (admin only)\n"
         "/idgc — Cek chat ID grup atau chat pribadi\n"
         "/info — Lihat semua history user yang pernah interaksi dengan bot\n"
-        "/restore — Restore database dari file ZIP backup (owner only)"
+        "/restore — Restore database dari file ZIP backup (owner only)\n\n"
+        "**WELCOME / GOODBYE:**\n"
+        "/welcome on/off — Nyalain/matiin welcome otomatis\n"
+        "/goodbye on/off — Nyalain/matiin goodbye otomatis\n"
+        "/setwelcome — Reply ke pesan atau media untuk set welcome custom\n"
+        "/resetwelcome — Reset welcome ke default\n"
+        "/setgoodbye — Reply ke pesan atau media untuk set goodbye custom\n"
+        "/resetgoodbye — Reset goodbye ke default\n"
+        "/cleanwelcome on/off — Nyalain/matiin hapus pesan welcome lama"
     )
     await event.reply(help_msg)
 
