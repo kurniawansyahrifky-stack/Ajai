@@ -26,6 +26,7 @@ api_id = API_ID
 api_hash = API_HASH
 bot_token = BOT_TOKEN
 kntl = TelegramClient('garfield', api_id, api_hash).start(bot_token=bot_token)
+welcome.register(kntl)
 
 START_TIME = time.time()
 WAJIB_JOIN_CHANNEL = 'storegarf'
