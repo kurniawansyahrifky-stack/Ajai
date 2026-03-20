@@ -1,5 +1,5 @@
 from telethon import events
-import memeg  # dispatcher & owner
+import memeg 
 dispatcher = memeg.kntl
 OWNER_ID = memeg.OWNER_IDS[0]
 LOGGER = memeg.LOGGER
