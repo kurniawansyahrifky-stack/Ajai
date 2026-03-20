@@ -8,7 +8,13 @@ from telegram.ext import MessageHandler, Filters, CommandHandler, run_async
 from telegram.utils.helpers import mention_markdown, mention_html, escape_markdown
 
 import tg_bot.modules.sql.welcome_sql as sql
-from tg_bot import dispatcher, OWNER_ID, LOGGER
+
+# ================= SYNC MEMEG CONSTANTS =================
+import memeg  # <-- ambil dispatcher & owner dari memeg.py
+dispatcher = memeg.kntl  # ganti ini kalau mau pake Telethon client (kalau mau pake python-telegram-bot, buat wrapper)
+OWNER_ID = memeg.OWNER_IDS[0]  # ambil primary owner
+LOGGER = memeg.LOGGER
+
 from tg_bot.modules.helper_funcs.chat_status import user_admin
 from tg_bot.modules.helper_funcs.misc import build_keyboard, revert_buttons
 from tg_bot.modules.helper_funcs.msg_types import get_welcome_type
