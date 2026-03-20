@@ -1,11 +1,17 @@
-from telegram import Message, Chat, Update, Bot, User
-from telegram.constants import ParseMode
-from telegram import InlineKeyboardMarkup
-from telegram.error import BadRequest
-from telegram.ext import MessageHandler, Filters, CommandHandler, run_async
-from telegram.utils.helpers import mention_markdown, mention_html, escape_markdown
+from telethon import events
+import memeg  # dispatcher & owner
+dispatcher = memeg.kntl
+OWNER_ID = memeg.OWNER_IDS[0]
+LOGGER = memeg.LOGGER
 
 import tg_bot.modules.sql.welcome_sql as sql
+
+from tg_bot.modules.helper_funcs.chat_status import user_admin
+from tg_bot.modules.helper_funcs.misc import build_keyboard, revert_buttons
+from tg_bot.modules.helper_funcs.msg_types import get_welcome_type
+from tg_bot.modules.helper_funcs.string_handling import markdown_parser, \
+    escape_invalid_curly_brackets
+from tg_bot.modules.log_channel import loggable
 
 # ================= SYNC MEMEG CONSTANTS =================
 import memeg  # <-- ambil dispatcher & owner dari memeg.py
