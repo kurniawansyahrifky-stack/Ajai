@@ -224,129 +224,134 @@ async def ping(event):
     await msg.edit(text, file=banner)
 
 # ================= TAGALL =================
-
-# CONFIG (DI GAS DIKIT)
 BATCH_SIZE = 3
-DELAY_MIN = 0.5
-DELAY_MAX = 1.0
 WORKERS = 4
-MAX_MSG_LEN = 3500
-
-WAJIB_JOIN_CHANNEL = "storegarf"
+DELAY = 0.6
 
 running_tagall = {}
-progress_count = {}
-progress_lock = asyncio.Lock()
 
+async def send_batch(chat_id, msg, user_list, emoji_list, mode, progress_msg=None, total_users=None):
+    full_msg = f"{msg}\n\n{' '.join(user_list)}\n{' '.join(emoji_list)}\n\n🛍 my store @storegarf"
 
-# ================= SAFE SEND =================
-async def safe_send(chat_id, text, reply_to=None, buttons=None):
-    while True:
-        try:
-            if reply_to:
-                return await reply_to.reply(text, buttons=buttons)
-            else:
-                return await kntl.send_message(chat_id, text, buttons=buttons)
-
-        except FloodWaitError as e:
-            wait = min(e.seconds, 15)  # ❗ cegah diem lama
-            print(f"[FLOOD] {e.seconds}s → {wait}s")
-            await asyncio.sleep(wait)
-
-        except Exception as e:
-            print("ERROR SEND:", e)
-            await asyncio.sleep(1)
-            return None
-
-
-# ================= SPLIT MESSAGE =================
-def split_message(base_text, mentions):
-    chunks = []
-    current = base_text
-
-    for m in mentions:
-        if len(current) + len(m) + 1 > MAX_MSG_LEN:
-            chunks.append(current)
-            current = base_text + "\n\n" + m
+    try:
+        if mode == "tempel":
+            sent_msg = await kntl.send_message(chat_id, full_msg, buttons=[[Button.inline("STOP", b"stop_tagall")]])
         else:
-            current += " " + m
+            sent_msg = await msg.reply(full_msg, buttons=[[Button.inline("STOP", b"stop_tagall")]])
 
-    chunks.append(current)
-    return chunks
+        spam_chats.setdefault(f"messages_{chat_id}", []).append(sent_msg.id)
+        message_ids.setdefault(chat_id, []).append(sent_msg.id)
 
+    except FloodWaitError as e:
+        await asyncio.sleep(min(e.seconds, 10))
+    except:
+        pass
 
-# ================= STOP BUTTON =================
-@kntl.on(events.CallbackQuery(data=b"stop_tagall"))
-async def stop_tagall_handler(event):
-    chat_id = event.chat_id
-    running_tagall[chat_id] = False
-    await event.answer("🛑 Tagall dihentikan!", alert=True)
+    # ❗ jangan terlalu sering edit (biar ga lag)
+    if progress_msg and total_users is not None and random.random() > 0.8:
+        try:
+            await progress_msg.edit(f"⏱ Sedang tagall... {total_users}")
+        except:
+            pass
 
 
 # ================= WORKER =================
-async def worker(chat_id, msg, queue, mode, progress_msg, total_users):
+async def worker(chat_id, msg, queue, mode, progress_msg, end_time):
     while running_tagall.get(chat_id):
 
-        batch = []
+        if end_time and time.time() > end_time:
+            break
 
+        batch = []
         for _ in range(BATCH_SIZE):
             try:
-                user = queue.get_nowait()
-                batch.append(user)
+                batch.append(queue.get_nowait())
             except asyncio.QueueEmpty:
                 break
 
         if not batch:
             break
 
-        base_text = f"{msg}\n\n🛍 my store @storegarf"
-        messages = split_message(base_text, batch)
+        await send_batch(chat_id, msg, batch, ["🎯"] * len(batch), mode, progress_msg, len(batch))
 
-        for text in messages:
-            if not running_tagall.get(chat_id):
-                break
-
-            sent_msg = await safe_send(
-                chat_id,
-                text,
-                reply_to=msg if mode == "balas" else None,
-                buttons=[[Button.inline("STOP", b"stop_tagall")]]
-            )
-
-            if sent_msg:
-                spam_chats.setdefault(f"messages_{chat_id}", []).append(sent_msg.id)
-                message_ids.setdefault(chat_id, []).append(sent_msg.id)
-
-        async with progress_lock:
-            progress_count[chat_id] += len(batch)
-            current = progress_count[chat_id]
-
-        if progress_msg and random.random() > 0.85:  # ❗ kurangi edit biar ga lag
-            try:
-                await progress_msg.edit(f"⚡ Tagging...\n✔ {current}/{total_users}")
-            except:
-                pass
-
-        await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
-        await asyncio.sleep(0)  # ❗ anti freeze
+        await asyncio.sleep(DELAY)
 
 
-# ================= TAGALL =================
+# ================= DURASI =================
+@kntl.on(events.CallbackQuery(pattern=b"durasi_(.*)"))
+async def pilih_durasi(event):
+    chat_id = event.chat_id
+    data = event.data.decode().split("_")[1]
+
+    setup = spam_chats.get(f"setup_{chat_id}")
+    if not setup:
+        return await event.answer("Session hilang!", alert=True)
+
+    msg = setup["msg"]
+    mode = setup["mode"]
+
+    durasi_map = {
+        "2": 120,
+        "5": 300,
+        "10": 600,
+        "30": 1800,
+        "60": 3600,
+        "unlimited": None
+    }
+
+    duration = durasi_map.get(data)
+
+    await event.edit(f"🚀 Tagall jalan {data} menit...")
+
+    # ambil user
+    users = []
+    async for u in kntl.iter_participants(chat_id):
+        if not u.bot and u.first_name:
+            users.append(f"[{u.first_name}](tg://user?id={u.id})")
+
+    queue = asyncio.Queue()
+    for u in users:
+        queue.put_nowait(u)
+
+    running_tagall[chat_id] = True
+    end_time = time.time() + duration if duration else None
+
+    progress_msg = await kntl.send_message(chat_id, "⏱ Mulai tagall...")
+
+    tasks = []
+    for _ in range(WORKERS):
+        tasks.append(asyncio.create_task(
+            worker(chat_id, msg, queue, mode, progress_msg, end_time)
+        ))
+
+    await asyncio.gather(*tasks)
+
+    running_tagall[chat_id] = False
+
+    await progress_msg.edit(f"✅ DONE tag {len(users)} user")
+
+
+# ================= STOP =================
+@kntl.on(events.CallbackQuery(data=b"stop_tagall"))
+async def stop_tagall_handler(event):
+    running_tagall[event.chat_id] = False
+    await event.answer("🛑 Tagall dihentikan!", alert=True)
+
+
+# ================= COMMAND =================
 @kntl.on(events.NewMessage(pattern="^/(all|tagall) ?(.*)"))
 async def tagall(event):
     chat_id = event.chat_id
-
     if event.is_private:
         return await event.respond("Ini cuma buat grup, bukan chat pribadi.")
 
     user = await event.get_sender()
     await update_user_history(user)
 
-    # ===== WAJIB JOIN =====
     if not await is_joined(event.sender_id):
         return await event.respond(
-            "Join dulu ke store owner gua sat!!",
-            buttons=[[Button.url("🛍 JOIN STORE", "https://t.me/storegarf")]]
+            f"Lo harus join dulu channel gua sat!! @{WAJIB_JOIN_CHANNEL}!",
+            buttons=[[Button.url("💌 Join Channel", f"https://t.me/{WAJIB_JOIN_CHANNEL}")]]
         )
 
     try:
@@ -359,7 +364,6 @@ async def tagall(event):
         return await event.respond("Lu bukan admin grup!")
 
     text_input = event.pattern_match.group(2)
-
     if text_input:
         mode = "tempel"
         msg = text_input
@@ -369,48 +373,17 @@ async def tagall(event):
     else:
         return await event.respond("Kasih teks dulu goblok Lo!")
 
-    progress_msg = await event.respond("🚀 Starting tagall...")
+    buttons_durasi = [
+        [Button.inline("2 menit", b"durasi_2"), Button.inline("5 menit", b"durasi_5")],
+        [Button.inline("10 menit", b"durasi_10"), Button.inline("30 menit", b"durasi_30")],
+        [Button.inline("60 menit", b"durasi_60"), Button.inline("Unlimited", b"durasi_unlimited")]
+    ]
 
-    message_ids.setdefault(chat_id, []).append(progress_msg.id)
-    spam_chats.setdefault(f"messages_{chat_id}", [])
+    menu_msg = await event.respond("Pilih durasi Tagall:", buttons=buttons_durasi)
 
-    # ===== AMBIL USER =====
-    users = []
-    async for u in kntl.iter_participants(chat_id):
-        try:
-            if u.bot or not u.first_name:
-                continue
-
-            users.append(f"[{u.first_name}](tg://user?id={u.id})")
-
-            if len(users) % 500 == 0:
-                await asyncio.sleep(0)
-
-        except (UserDeactivatedError, UserDeactivatedBanError):
-            continue
-        except:
-            continue
-
-    total_users = len(users)
-
-    queue = asyncio.Queue()
-    for u in users:
-        queue.put_nowait(u)
-
-    running_tagall[chat_id] = True
-    progress_count[chat_id] = 0
-
-    tasks = []
-    for _ in range(WORKERS):
-        tasks.append(asyncio.create_task(
-            worker(chat_id, msg, queue, mode, progress_msg, total_users)
-        ))
-
-    await asyncio.gather(*tasks)
-
-    running_tagall[chat_id] = False
-
-    await progress_msg.edit(f"✅ DONE tag {total_users} user!")
+    message_ids.setdefault(chat_id, []).append(menu_msg.id)
+    spam_chats[f"setup_{chat_id}"] = {"msg": msg, "mode": mode}
+    spam_chats[f"durasi_{chat_id}"] = False
 
 # ================= CALLBACK DURASI =================
 @kntl.on(events.CallbackQuery(pattern=b"durasi_"))
