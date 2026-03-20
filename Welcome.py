@@ -451,6 +451,11 @@ def __chat_settings__(chat_id, user_id):
     return "This chat has it's welcome preference set to `{}`.\n" \
            "It's goodbye preference is `{}`.".format(welcome_pref, goodbye_pref)
 
+# ================= WELCOME HELP =================
+@kntl.on(events.NewMessage(pattern="^/welcomehelp$"))
+async def welcome_help_handler(event):
+    await event.reply(WELC_HELP_TXT, parse_mode="markdown")
+
 
 __help__ = """
 {}
