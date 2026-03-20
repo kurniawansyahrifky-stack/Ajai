@@ -491,13 +491,6 @@ async def durasi_handler(event):
     )
     message_ids.setdefault(chat_id, []).append(selesai_msg.id)
 
-# ================= STOP =================
-@kntl.on(events.CallbackQuery(data=b"stop_tagall"))
-async def stop(event):
-    chat_id = event.chat_id
-    spam_chats[chat_id] = False
-    await event.edit("STOP! Tagall dihentikan nih njink!! ✅", buttons=[[Button.inline("CLEAR TAGALL", b"clear_tagall")]])
-
 # ================= CLEAR =================
 @kntl.on(events.CallbackQuery(data=b"clear_tagall"))
 async def clear_tagall(event):
