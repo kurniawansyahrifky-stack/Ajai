@@ -656,6 +656,7 @@ async def send_single_safe(client, msg, target_id):
             await client.send_message(target_id, msg.message or "")
 
         return True, None
+
     except Exception as e:
         return False, str(e)
 
