@@ -226,8 +226,8 @@ async def ping(event):
 # ================= TAGALL =================
 # CONFIG
 BATCH_SIZE = 3
-DELAY_MIN = 0.2
-DELAY_MAX = 0.5
+DELAY_MIN = 0.7
+DELAY_MAX = 1.2
 WORKERS = 7
 MAX_MSG_LEN = 3500
 
