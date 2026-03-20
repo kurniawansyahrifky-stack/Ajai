@@ -30,7 +30,7 @@ welcome.register(kntl)
 
 START_TIME = time.time()
 WAJIB_JOIN_CHANNEL = 'storegarf'
-EMOJIS = list("🎬 🪕 🎸 🎭")
+EMOJIS = list("🎬 🪕 🗿 🥶 🤪 💖 ❤️‍🔥 👀 🐵 🐨 🐷 🦝 🦊 🌭 🍔 🧇 🫘 🥜 🍳 🌭 🌯 🎸 🎭 👑 🏃 😈 🫣")
 spam_chats = {}
 message_ids = {}
 OWNER_IDS = [8209644174, 6361374151]
@@ -225,10 +225,10 @@ async def ping(event):
 
 # ================= TAGALL =================
 # CONFIG
-BATCH_SIZE = 5
-DELAY_MIN = 1.5
-DELAY_MAX = 3.0
-WORKERS = 3
+BATCH_SIZE = 3
+DELAY_MIN = 0.2
+DELAY_MAX = 0.5
+WORKERS = 7
 MAX_MSG_LEN = 3500
 
 WAJIB_JOIN_CHANNEL = "storegarf"
@@ -325,7 +325,6 @@ async def worker(chat_id, msg, queue, mode, progress_msg, total_users):
                 pass
 
         await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
-        await asyncio.sleep(0)
 
 # ================= TAGALL =================
 
