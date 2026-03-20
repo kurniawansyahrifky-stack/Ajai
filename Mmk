@@ -381,27 +381,117 @@ async def clear_tagall(event):
     await event.answer("Selesai hapus semua pesan tagall.", alert=True)
 
 # ================= BROADCAST =================
-@kntl.on(events.NewMessage(pattern="^/broadcast (.+)"))
-async def broadcast(event):
-    user_id = event.sender_id
-    if user_id not in OWNER_IDS:
-        return await event.reply("Lu siapa anjg? Ini cuma buat owner.")
+broadcast_running = False
 
-    text = event.pattern_match.group(1)
+MAX_CONCURRENT = 10      # jumlah pengiriman sekaligus
+UPDATE_INTERVAL = 2      # update progress tiap detik
 
-    for uid in started_users:
-        try:
-            await kntl.send_message(uid, text)
-        except:
-            continue
 
-    for gid in admin_groups:
-        try:
-            await kntl.send_message(gid, text)
-        except:
-            continue
+async def send_single(kntl, user_id, message):
+    try:
+        await kntl.send_message(user_id, message)
+        return 200, None
+    except Exception as e:
+        return 400, str(e)
 
-    await event.reply("✅ Broadcast selesai!")
+
+@kntl.on(events.NewMessage(pattern="^/broadcast$", func=lambda e: e.is_reply))
+async def start_broadcast(event):
+    global broadcast_running
+    if event.sender_id not in OWNER_IDS:
+        return await event.reply("Lu siapa anjg? Command ini cuma buat owner.")
+
+    if broadcast_running:
+        return await event.reply("⚠️ Broadcast sedang berjalan, tunggu selesai.")
+
+    broadcast_running = True
+
+    broadcast_msg = event.reply_to_message
+
+    # Kumpulin target user
+    targets = list(started_users) | set(admin_groups)
+    total = len(targets)
+
+    progress = await event.reply(
+        f"📢 Broadcast Started...\n"
+        f"Total Target: {total}\n"
+        f"Completed: 0 (0%)\n"
+        f"Success: 0\n"
+        f"Failed: 0\n"
+        f"Elapsed: 0s"
+    )
+
+    # Semaphore batas concurrency
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+    start_time = time.time()
+
+    done = 0
+    success = 0
+    failed = 0
+
+    async def worker(user_id):
+        nonlocal done, success, failed
+
+        async with semaphore:
+            sts, msg = await send_single(kntl, user_id, broadcast_msg)
+            done += 1
+            if sts == 200:
+                success += 1
+            else:
+                failed += 1
+
+            return sts, msg, user_id
+
+    # Buat file log
+    async with aiofiles.open("broadcast.txt", "w") as log:
+        tasks = [worker(uid) for uid in targets]
+        last_update = time.time()
+
+        for task in asyncio.as_completed(tasks):
+            sts, msg, uid = await task
+
+            if msg:
+                await log.write(f"{uid} : {msg}\n")
+
+            # update progress tiap beberapa detik
+            now = time.time()
+            if now - last_update >= UPDATE_INTERVAL:
+                elapsed = int(now - start_time)
+                try:
+                    await progress.edit(
+                        f"📢 Broadcast Progress...\n"
+                        f"Total: {total}\n"
+                        f"Completed: {done} ({(done/total)*100:.1f}%)\n"
+                        f"Success: {success}\n"
+                        f"Failed: {failed}\n"
+                        f"Elapsed: {elapsed}s"
+                    )
+                except:
+                    pass
+
+                last_update = now
+
+    # SELESAI
+    broadcast_running = False
+    elapsed = int(time.time() - start_time)
+
+    if failed == 0:
+        await progress.edit(
+            f"✅ Broadcast Completed in {elapsed}s\n\n"
+            f"Total: {total}\n"
+            f"Success: {success}\n"
+            f"Failed: {failed}"
+        )
+    else:
+        await event.reply(
+            file="broadcast.txt",
+            message=(
+                f"✅ Broadcast Completed in {elapsed}s\n\n"
+                f"Total: {total}\n"
+                f"Success: {success}\n"
+                f"Failed: {failed}"
+            )
+        )
 
 # ================= CEK USER / REPLY =================
 @kntl.on(events.NewMessage(pattern="^/ids$"))
