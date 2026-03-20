@@ -383,23 +383,28 @@ async def clear_tagall(event):
     await event.answer("Selesai hapus semua pesan tagall.", alert=True)
 
 # ================= BROADCAST =================
+# ================= BROADCAST =================
+
 broadcast_running = False
 
 MAX_CONCURRENT = 10      # jumlah pengiriman sekaligus
 UPDATE_INTERVAL = 2      # update progress tiap detik
 
 
+# --- fungsi kirim satu pesan ---
 async def send_single(kntl, user_id, message):
     try:
-        await kntl.send_message(user_id, message)
+        await message.copy_to(user_id)   # <<< FIX PENTING
         return 200, None
     except Exception as e:
         return 400, str(e)
 
 
+# --- trigger /broadcast ---
 @kntl.on(events.NewMessage(pattern="^/broadcast$", func=lambda e: e.is_reply))
 async def start_broadcast(event):
     global broadcast_running
+
     if event.sender_id not in OWNER_IDS:
         return await event.reply("Lu siapa anjg? Command ini cuma buat owner.")
 
@@ -407,11 +412,10 @@ async def start_broadcast(event):
         return await event.reply("⚠️ Broadcast sedang berjalan, tunggu selesai.")
 
     broadcast_running = True
-
     broadcast_msg = event.reply_to_message
 
-    # Kumpulin target user
-    targets = list(started_users) | set(admin_groups)
+    # target user
+    targets = set(started_users) | set(admin_groups)   # <<< FIX PENTING
     total = len(targets)
 
     progress = await event.reply(
@@ -423,7 +427,6 @@ async def start_broadcast(event):
         f"Elapsed: 0s"
     )
 
-    # Semaphore batas concurrency
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     start_time = time.time()
 
@@ -437,6 +440,7 @@ async def start_broadcast(event):
         async with semaphore:
             sts, msg = await send_single(kntl, user_id, broadcast_msg)
             done += 1
+
             if sts == 200:
                 success += 1
             else:
@@ -444,7 +448,7 @@ async def start_broadcast(event):
 
             return sts, msg, user_id
 
-    # Buat file log
+    # log file
     async with aiofiles.open("broadcast.txt", "w") as log:
         tasks = [worker(uid) for uid in targets]
         last_update = time.time()
@@ -455,7 +459,7 @@ async def start_broadcast(event):
             if msg:
                 await log.write(f"{uid} : {msg}\n")
 
-            # update progress tiap beberapa detik
+            # update progress
             now = time.time()
             if now - last_update >= UPDATE_INTERVAL:
                 elapsed = int(now - start_time)
@@ -473,7 +477,7 @@ async def start_broadcast(event):
 
                 last_update = now
 
-    # SELESAI
+    # selesai
     broadcast_running = False
     elapsed = int(time.time() - start_time)
 
