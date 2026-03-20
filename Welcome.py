@@ -424,7 +424,7 @@ WELC_HELP_TXT = "Your group's welcome/goodbye messages can be personalised in mu
                 "Simply replace `group_id` with your group's id, which can be obtained via /id, and you're good to " \
                 "go. Note that group ids are usually preceded by a `-` sign; this is required, so please don't " \
                 "remove it.\n" \
-                "If you're feeling fun, you can even set images/gifs/videos/voice
+                "If you're feeling fun, you can even set images/gifs/videos/voice messages as the welcome message by replying to the desired media, and calling /setwelcome."
 
 messages as the welcome message by replying to the desired media, and calling /setwelcome.".format(dispatcher.bot.username)
 
