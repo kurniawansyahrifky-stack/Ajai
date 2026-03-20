@@ -1,0 +1,61 @@
+
+# ================= TAGALL =================
+async def send_batch(chat_id, msg, user_list, emoji_list, mode, progress_msg=None, total_users=None):
+    full_msg = f"{msg}\n\n{' '.join(user_list)}\n{' '.join(emoji_list)}\n\n🛍 my store @storegarf"
+    if mode == "tempel":
+        sent_msg = await kntl.send_message(chat_id, full_msg, buttons=[[Button.inline("STOP", b"stop_tagall")]])
+    else:
+        sent_msg = await msg.reply(full_msg, buttons=[[Button.inline("STOP", b"stop_tagall")]])
+    spam_chats[f"messages_{chat_id}"].append(sent_msg.id)
+    message_ids.setdefault(chat_id, []).append(sent_msg.id)
+
+    # update progress realtime
+    if progress_msg and total_users is not None:
+        try:
+            await progress_msg.edit(f"⏱ Sedang tagall... Total user ditag: {total_users}")
+        except:
+            pass
+
+@kntl.on(events.NewMessage(pattern="^/(all|tagall) ?(.*)"))
+async def tagall(event):
+    chat_id = event.chat_id
+    if event.is_private:
+        return await event.respond("Ini cuma buat grup, bukan chat pribadi.")
+
+    user = await event.get_sender()
+    await update_user_history(user)
+
+    if not await is_joined(event.sender_id):
+        return await event.respond(
+            f"Lo harus join dulu channel gua sat!! @{WAJIB_JOIN_CHANNEL}!",
+            buttons=[[Button.url("💌 Join Channel", f"https://t.me/{WAJIB_JOIN_CHANNEL}")]]
+        )
+
+    try:
+        p = await kntl(GetParticipantRequest(chat_id, event.sender_id))
+        is_admin = isinstance(p.participant, (ChannelParticipantAdmin, ChannelParticipantCreator))
+    except:
+        is_admin = False
+
+    if not is_admin:
+        return await event.respond("Lu bukan admin grup!")
+
+    text_input = event.pattern_match.group(2)
+    if text_input:
+        mode = "tempel"
+        msg = text_input
+    elif event.is_reply:
+        mode = "balas"
+        msg = await event.get_reply_message()
+    else:
+        return await event.respond("Kasih teks dulu goblok Lo!")
+
+    buttons_durasi = [
+        [Button.inline("2 menit", b"durasi_2"), Button.inline("5 menit", b"durasi_5")],
+        [Button.inline("10 menit", b"durasi_10"), Button.inline("30 menit", b"durasi_30")],
+        [Button.inline("60 menit", b"durasi_60"), Button.inline("Unlimited", b"durasi_unlimited")]
+    ]
+    menu_msg = await event.respond("Pilih durasi Tagall:", buttons=buttons_durasi)
+    message_ids.setdefault(chat_id, []).append(menu_msg.id)
+    spam_chats[f"setup_{chat_id}"] = {"msg": msg, "mode": mode}
+    spam_chats[f"durasi_{chat_id}"] = False
