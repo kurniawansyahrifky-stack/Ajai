@@ -1,0 +1,148 @@
+import requests
+import time
+import threading
+import asyncio
+from queue import Queue
+from telegram import Update
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+from telethon import TelegramClient
+
+# ================= CONFIG =================
+TOKEN = "ISI_BOT_TOKEN_LU"
+API_URL = "http://127.0.0.1:5000"
+TARGET_CHATS = [-1001492325666]
+
+api_id = 123456
+api_hash = "ISI_API_HASH_LU"
+
+# ================= SETUP =================
+task_queue = Queue()
+
+DELAY = 3
+BATCH_SIZE = 5
+
+client = TelegramClient("scrape_session", api_id, api_hash)
+
+# ================= GET MEMBER =================
+def get_members(chat_id):
+    try:
+        r = requests.get(f"{API_URL}/get?chat_id={chat_id}")
+        data = r.json()
+
+        # kalau member dikit → fallback scrape
+        if len(data) < 50:
+            print("⚠️ DB sedikit, scrape ulang...")
+            data = scrape_members(chat_id)
+
+        return data
+    except:
+        return {}
+
+# ================= SCRAPE LANGSUNG =================
+def scrape_members(chat_id):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    return loop.run_until_complete(_scrape(chat_id))
+
+async def _scrape(chat_id):
+    await client.start()
+
+    users = {}
+
+    async for u in client.iter_participants(chat_id):
+        if not u.bot and u.first_name:
+            users[str(u.id)] = u.first_name
+
+    # kirim ke API biar kesimpen
+    try:
+        requests.post(f"{API_URL}/save", json={
+            "chat_id": str(chat_id),
+            "users": [{"id": uid, "name": name} for uid, name in users.items()]
+        })
+        print(f"✅ Saved {len(users)} users ke API")
+    except:
+        pass
+
+    return users
+
+# ================= WORKER =================
+def tagall_worker():
+    while True:
+        chat_id, text = task_queue.get()
+
+        members = get_members(chat_id)
+        if not members:
+            print("❌ Member kosong")
+            task_queue.task_done()
+            continue
+
+        user_ids = list(members.keys())
+
+        # rotate biar ga itu2 aja
+        user_ids = user_ids[5:] + user_ids[:5]
+
+        total = len(user_ids)
+        sent = 0
+
+        for i in range(0, total, BATCH_SIZE):
+            batch = user_ids[i:i+BATCH_SIZE]
+
+            mention_text = ""
+            for uid in batch:
+                name = members[uid]
+                mention_text += f"[{name}](tg://user?id={uid}) "
+
+            try:
+                bot.send_message(
+                    chat_id,
+                    f"🔥 TAGALL START\n\n{text}\n\n{mention_text}",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                print("Error:", e)
+
+            sent += len(batch)
+            print(f"✔ {sent}/{total}")
+
+            time.sleep(DELAY)
+
+        bot.send_message(chat_id, "✅ DONE")
+        task_queue.task_done()
+
+# ================= HANDLER =================
+def handle_private(update: Update, context: CallbackContext):
+    msg = update.message
+
+    if msg.chat.type != "private":
+        return
+
+    if "t.me" not in msg.text:
+        msg.reply_text("❌ Kirim link t.me")
+        return
+
+    link = msg.text
+
+    for chat_id in TARGET_CHATS:
+        task_queue.put((chat_id, link))
+
+    msg.reply_text("🔥 Tagall dimulai")
+
+# ================= MAIN =================
+def main():
+    global bot
+
+    updater = Updater(TOKEN, use_context=True)
+    bot = updater.bot
+
+    dp = updater.dispatcher
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_private))
+
+    threading.Thread(target=tagall_worker, daemon=True).start()
+
+    print("🚀 Bot jalan...")
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
