@@ -1,0 +1,104 @@
+import requests
+import time
+import threading
+from queue import Queue
+from telegram import Update
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+
+TOKEN = "ISI_BOT_TOKEN_LU"
+API_URL = "http://127.0.0.1:5000/get"
+TARGET_CHATS = [-1001492325666]
+
+# queue biar ga tabrakan
+task_queue = Queue()
+
+# delay (anti spam smooth)
+DELAY = 3  # detik per batch
+BATCH_SIZE = 5  # 5 user per kirim
+
+def get_members(chat_id):
+    try:
+        r = requests.get(f"{API_URL}?chat_id={chat_id}")
+        return r.json()
+    except:
+        return {}
+
+def tagall_worker():
+    while True:
+        chat_id, text = task_queue.get()
+
+        members = get_members(chat_id)
+        if not members:
+            print("❌ Member kosong")
+            task_queue.task_done()
+            continue
+
+        user_ids = list(members.keys())
+
+        # rotate biar ga itu2 aja
+        user_ids = user_ids[5:] + user_ids[:5]
+
+        total = len(user_ids)
+        sent = 0
+
+        for i in range(0, total, BATCH_SIZE):
+            batch = user_ids[i:i+BATCH_SIZE]
+
+            mention_text = ""
+            for uid in batch:
+                name = members[uid]
+                mention_text += f"[{name}](tg://user?id={uid}) "
+
+            try:
+                bot.send_message(
+                    chat_id,
+                    f"🔥 TAGALL START\n\n{text}\n\n{mention_text}",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                print("Error:", e)
+
+            sent += len(batch)
+            print(f"✔ {sent}/{total}")
+
+            time.sleep(DELAY)
+
+        bot.send_message(chat_id, "✅ DONE")
+        task_queue.task_done()
+
+def handle_private(update: Update, context: CallbackContext):
+    msg = update.message
+
+    # cuma private
+    if msg.chat.type != "private":
+        return
+
+    if "t.me" not in msg.text:
+        msg.reply_text("❌ Kirim link t.me")
+        return
+
+    link = msg.text
+
+    for chat_id in TARGET_CHATS:
+        task_queue.put((chat_id, link))
+
+    msg.reply_text("🔥 Tagall dimulai")
+
+def main():
+    global bot
+    updater = Updater(TOKEN, use_context=True)
+    bot = updater.bot
+
+    dp = updater.dispatcher
+
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_private))
+
+    # worker thread
+    threading.Thread(target=tagall_worker, daemon=True).start()
+
+    updater.start_polling()
+    print("🚀 Bot jalan...")
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
