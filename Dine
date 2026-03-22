@@ -1,0 +1,158 @@
+import requests
+import time
+import threading
+import asyncio
+from queue import Queue
+from telegram import Update
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, CommandHandler
+from telethon import TelegramClient
+loop = asyncio.get_event_loop()
+TOKEN = "8307438695:AAEU8MPX2BSj7EH5VOjHVhtfqloS7olHObg"
+API_URL = "http://127.0.0.1:5000/get"
+TARGET_CHATS = [-1001492325666]
+# 🔥 TELETHON (buat ambil member real)
+api_id = 33370509
+api_hash = "669af6caebf2aca264b16cf8b40d37b2"
+client = TelegramClient("session_mix", api_id, api_hash)
+# queue biar ga tabrakan
+task_queue = Queue()
+# delay (anti spam smooth)
+DELAY = 3
+BATCH_SIZE = 5
+# ================= TELETHON SCRAPE =================
+async def scrape(chat_id):
+    users = {}
+    count = 0
+    try:
+        dialogs = await client.get_dialogs()
+        entity = None
+        for d in dialogs:
+            if d.id == chat_id:
+                entity = d.entity
+                break
+        if not entity:
+            print("❌  entity ga ketemu")
+            return {}
+        async for u in client.iter_participants(entity):
+            if not u.bot and u.first_name:
+                users[str(u.id)] = u.first_name
+                count += 1
+                if count >= 200:
+                    break
+    except Exception as e:
+        print("❌  scrape error:", e)
+    return users
+# ================= FIX DI SINI =================
+def get_members(chat_id):
+    print("🚀 Ambil member...")
+    merged = {}
+    # API
+    try:
+        r = requests.get(f"{API_URL}?chat_id={chat_id}", timeout=5)
+        api_data = r.json()
+        print("✅  API:", len(api_data))
+    except Exception as e:
+        print("❌  API error:", e)
+        api_data = {}
+    # TELETHON (FIX BENAR)
+    try:
+        live_data = loop.run_until_complete(scrape(chat_id))  # ✅  PAKAI chat_id
+        print("✅  Telethon:", len(live_data))
+    except Exception as e:
+        print("❌  Telethon error:", e)
+        live_data = {}
+    # merge
+    for uid, name in api_data.items():
+        merged[str(uid)] = name
+    for uid, name in live_data.items():
+        merged[str(uid)] = name
+    print(f"📊 TOTAL: {len(merged)}")
+    return merged
+# ==============================================
+def tagall_worker():
+    print("🔥 WORKER HIDUP")
+    while True:
+        print("⏳  Nunggu task...")
+        chat_id, text = task_queue.get()
+        print(f"📥 Dapet task: {chat_id}")
+        members = get_members(chat_id)
+        print(f"📊 Member: {len(members)}")
+        if not members:
+            print("❌  Member kosong")
+            task_queue.task_done()
+            continue
+        user_ids = list(members.keys())
+        # rotate biar ga itu2 aja
+        user_ids = user_ids[5:] + user_ids[:5]
+        total = len(user_ids)
+        sent = 0
+        # 🔥 TIMER 5 MENIT
+        start_time = time.time()
+        duration = 300  # 5 menit
+        while time.time() - start_time < duration:
+            for i in range(0, total, BATCH_SIZE):
+                # 🔥 STOP kalau waktu habis
+                if time.time() - start_time >= duration:
+                    break
+                batch = user_ids[i:i+BATCH_SIZE]
+                mention_text = ""
+                for uid in batch:
+                    name = members[uid]
+                    mention_text += f"[{name}](tg://user?id={uid}) "
+                try:
+                    print(f"📤 Kirim batch {sent}")
+                    bot.send_message(
+                        chat_id,
+                        f"🔥 TAGALL START\n\n{text}\n\n{mention_text}",
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    print("❌  Error:", e)
+                sent += len(batch)
+                print(f"✔ {sent}/{total}")
+                time.sleep(DELAY)
+        bot.send_message(chat_id, f"✅  DONE\n👥 Total mention: {sent}")
+
+        task_queue.task_done()
+# ================= HANDLER =================
+def handle_private(update: Update, context: CallbackContext):
+    if not update.message:
+        return  # 🔥 biar ga error NoneType
+    msg = update.message
+    if msg.chat.type != "private":
+        return
+    if not msg.text or "t.me" not in msg.text:
+        msg.reply_text("❌  Kirim link t.me")
+        return
+    link = msg.text
+    print("📥 TASK MASUK:", link)
+    for chat_id in TARGET_CHATS:
+        print("➡️ masuk queue ke:", chat_id)
+        task_queue.put((chat_id, link))
+    msg.reply_text("🔥 Tagall dimulai")
+# ================= MAIN =================
+def start_cmd(update: Update, context: CallbackContext):
+    update.message.reply_text("✅  Bot aktif! Kirim link t.me buat tagall 🚀")
+def main():
+    global bot
+    updater = Updater(TOKEN, use_context=True)
+    bot = updater.bot
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler("start", start_cmd))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_private))
+    client.start()
+    print("✅  Telethon nyala")
+# worker thread
+    t = threading.Thread(target=tagall_worker)
+    t.daemon = True
+    t.start()
+    print("🚀 Bot jalan...")
+    print("🧵 Worker harusnya aktif...")
+    updater.start_polling()
+    updater.idle()
+if __name__ == "__main__":
+    try:
+        print("🚀 START PROGRAM")
+        main()
+    except Exception as e:
+        print("💥 ERROR UTAMA:", e)
