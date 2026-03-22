@@ -1,0 +1,49 @@
+ ===================== AUTO RESTART =====================
+async def auto_restart():
+    tz = timezone("Asia/Jakarta")
+    cron = croniter.croniter("00 00 * * *", datetime.now(tz))
+    while True:
+        now = datetime.now(tz)
+        next_run = cron.get_next(datetime)
+        wait_time = (next_run - now).total_seconds()
+        # Tunggu sampai jam 00:00 WIB
+        await asyncio.sleep(wait_time)
+        process = await app.send_message(
+            config.LOG_GROUP_ID,
+            "><b>🚨 <i>Restart Daily ..</i></b>",
+        )
+        await asyncio.sleep(1.5)
+        await process.edit("><b>🔃 Backup Database ..</i></b>")
+        now_str = datetime.now(tz)
+        timestamp = now_str.strftime("%Y-%m-%d_%H-%M")
+        # Fix: Gunakan app.me.username
+        zip_filename = f"{app.me.username}_{timestamp}.zip"
+        # Fix: Gunakan arcname agar isi zip rapi (tidak full path)
+        with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
+            if os.path.exists(".env"):
+                zipf.write(".env", arcname=".env")
+            if os.path.exists(DB_PATH):
+                zipf.write(DB_PATH, arcname=os.path.basename(DB_PATH))
+        await process.edit("><b>✅  Backup Complete!</b>")
+        await app.send_document(
+            config.LOG_GROUP_ID,
+            zip_filename,
+            caption=f"Backup Database: {timestamp}"
+        )
+        # Hapus file zip setelah dikirim agar hemat storage
+        if os.path.exists(zip_filename):
+            os.remove(zip_filename)
+        # Bersihkan chat aktif sebelum restart
+        served_chats = await get_active_chats()
+        for chat_id in served_chats:
+            try:
+                await app.send_message(
+                    int(chat_id),
+                    "Bot restart daily\n\nYou can start playing again after 15–20 seconds",
+                )
+                await remove_active_chat(chat_id)
+                await remove_active_video_chat(chat_id)
+            except Exception:
+                pass
+        # Restart Script
+        asyncio.create_task(restart_process())
