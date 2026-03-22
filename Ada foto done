@@ -1,0 +1,370 @@
+import requests
+import time
+import threading
+import asyncio
+import json
+import re
+from queue import Queue
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext, CommandHandler, CallbackQueryHandler
+from telethon import TelegramClient
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+TOKEN = "ISI_TOKEN_LO"
+API_URL = "http://127.0.0.1:5000/get"
+TARGET_CHATS = [-1001492325666]
+
+OWNER_ID = 8209644174
+PARTNER_FILE = "partner.json"
+SETTING_FILE = "setting.json"
+
+# TELETHON
+api_id = 33370509
+api_hash = "669af6caebf2aca264b16cf8b40d37b2"
+client = TelegramClient("session_new", api_id, api_hash)
+
+task_queue = Queue()
+
+DELAY = 3
+BATCH_SIZE = 5
+
+# ================= SETTING =================
+
+def load_setting():
+    try:
+        with open(SETTING_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_setting(data):
+    with open(SETTING_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+# ================= PARTNER =================
+
+def normalize_link(link):
+    link = link.strip()
+    link = link.replace("https://", "").replace("http://", "")
+    link = link.replace("t.me/", "")
+    return link.lower()
+
+def load_partner():
+    try:
+        with open(PARTNER_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_partner(data):
+    with open(PARTNER_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+def get_group_name(link):
+    try:
+        username = normalize_link(link)
+        entity = loop.run_until_complete(client.get_entity(username))
+        return entity.title
+    except:
+        return "Unknown"
+
+# ================= OWNER SET =================
+
+def add_pict(update, context):
+    if update.effective_user.id != OWNER_ID or update.effective_chat.type != "private":
+        return
+
+    if not update.message.reply_to_message or not update.message.reply_to_message.photo:
+        update.message.reply_text("❌ reply foto dengan /addpict")
+        return
+
+    file_id = update.message.reply_to_message.photo[-1].file_id
+
+    data = load_setting()
+    data["start_pict"] = file_id
+    save_setting(data)
+
+    update.message.reply_text("✅ foto disimpan")
+
+def del_pict(update, context):
+    if update.effective_user.id != OWNER_ID or update.effective_chat.type != "private":
+        return
+
+    data = load_setting()
+    data.pop("start_pict", None)
+    save_setting(data)
+
+    update.message.reply_text("✅ foto dihapus")
+
+def add_pj(update, context):
+    if update.effective_user.id != OWNER_ID or update.effective_chat.type != "private":
+        return
+
+    try:
+        username = context.args[0]
+    except:
+        update.message.reply_text("❌ /addpj username")
+        return
+
+    data = load_setting()
+    data["pj"] = username.replace("@", "")
+    save_setting(data)
+
+    update.message.reply_text("✅ PJ disimpan")
+
+def del_pj(update, context):
+    if update.effective_user.id != OWNER_ID or update.effective_chat.type != "private":
+        return
+
+    data = load_setting()
+    data.pop("pj", None)
+    save_setting(data)
+
+    update.message.reply_text("✅ PJ dihapus")
+
+def add_rules(update, context):
+    if update.effective_user.id != OWNER_ID or update.effective_chat.type != "private":
+        return
+
+    if update.message.reply_to_message:
+        text = update.message.reply_to_message.text
+    else:
+        text = " ".join(context.args)
+
+    if not text:
+        update.message.reply_text("❌ isi rules")
+        return
+
+    data = load_setting()
+    data["rules"] = text
+    save_setting(data)
+
+    update.message.reply_text("✅ rules disimpan")
+
+def del_rules(update, context):
+    if update.effective_user.id != OWNER_ID or update.effective_chat.type != "private":
+        return
+
+    data = load_setting()
+    data.pop("rules", None)
+    save_setting(data)
+
+    update.message.reply_text("✅ rules dihapus")
+
+# ================= START =================
+
+def start_cmd(update: Update, context: CallbackContext):
+    data = load_setting()
+
+    text = "SELAMAT DATANG DI BOT TAGALL\n\nSILAHKAN SCREENSHOT SENDIRI"
+
+    buttons = []
+
+    if "pj" in data:
+        buttons.append([InlineKeyboardButton("REQUEST PARTNER", url=f"https://t.me/{data['pj']}")])
+
+    if "rules" in data:
+        buttons.append([InlineKeyboardButton("RULES PARTNER", callback_data="rules")])
+
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+
+    if "start_pict" in data:
+        context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=data["start_pict"],
+            caption=text,
+            reply_markup=markup
+        )
+    else:
+        update.message.reply_text(text, reply_markup=markup)
+
+# ================= CALLBACK =================
+
+def button_handler(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+
+    data = load_setting()
+
+    if query.data == "rules":
+        text = data.get("rules", "tidak ada rules")
+        query.message.reply_text(text)
+
+# ================= TELETHON =================
+
+async def scrape(chat_id):
+    users = {}
+    try:
+        dialogs = await client.get_dialogs()
+        entity = None
+        for d in dialogs:
+            if d.id == chat_id:
+                entity = d.entity
+                break
+
+        if not entity:
+            return {}
+
+        async for u in client.iter_participants(entity):
+            if not u.bot and u.first_name:
+                users[str(u.id)] = u.first_name
+    except:
+        pass
+
+    return users
+
+# ================= MEMBER =================
+
+def get_members(chat_id):
+    merged = {}
+
+    try:
+        r = requests.get(f"{API_URL}?chat_id={chat_id}", timeout=5)
+        api_data = r.json()
+    except:
+        api_data = {}
+
+    try:
+        live_data = loop.run_until_complete(scrape(chat_id))
+    except:
+        live_data = {}
+
+    for uid, name in api_data.items():
+        merged[str(uid)] = name
+    for uid, name in live_data.items():
+        merged[str(uid)] = name
+
+    return merged
+
+# ================= TAGALL =================
+
+def tagall_worker():
+    print("🔥 WORKER HIDUP")
+
+    while True:
+        chat_id, text = task_queue.get()
+
+        members = get_members(chat_id)
+
+        if not members:
+            task_queue.task_done()
+            continue
+
+        user_ids = list(members.keys())
+        user_ids = user_ids[5:] + user_ids[:5]
+
+        total = len(user_ids)
+        sent = 0
+
+        start_time = time.time()
+        duration = 300
+
+        while time.time() - start_time < duration:
+            for i in range(0, total, BATCH_SIZE):
+
+                if time.time() - start_time >= duration:
+                    break
+
+                batch = user_ids[i:i+BATCH_SIZE]
+
+                mention_text = ""
+                for uid in batch:
+                    name = members[uid]
+                    mention_text += f"[{name}](tg://user?id={uid}) "
+
+                try:
+                    bot.send_message(
+                        chat_id,
+                        f"🔥 TAGALL START\n\n{text}\n\n{mention_text}",
+                        parse_mode="Markdown"
+                    )
+                except:
+                    pass
+
+                sent += len(batch)
+                time.sleep(DELAY)
+
+        bot.send_message(chat_id, f"✅ DONE\n👥 {sent}")
+
+        task_queue.task_done()
+
+# ================= HANDLER =================
+
+def handle_private(update: Update, context: CallbackContext):
+    if not update.message:
+        return
+
+    msg = update.message
+
+    if msg.chat.type != "private":
+        return
+
+    if not msg.text:
+        msg.reply_text("❌ Kirim link")
+        return
+
+    links = re.findall(r"(https?://t\.me/\S+)", msg.text)
+
+    if not links:
+        msg.reply_text("❌ Tidak ada link t.me")
+        return
+
+    data = load_partner()
+
+    valid = False
+
+    for link in links:
+        username = normalize_link(link)
+
+        for p in data:
+            if p.get("username") == username:
+                valid = True
+                break
+
+    if not valid:
+        msg.reply_text("❌ Link tidak terdaftar partner")
+        return
+
+    for chat_id in TARGET_CHATS:
+        task_queue.put((chat_id, msg.text))
+
+    msg.reply_text("🔥 Tagall jalan")
+
+# ================= MAIN =================
+
+def main():
+    global bot
+
+    updater = Updater(TOKEN, use_context=True)
+    bot = updater.bot
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start_cmd))
+
+    dp.add_handler(CommandHandler("addpict", add_pict))
+    dp.add_handler(CommandHandler("delpict", del_pict))
+
+    dp.add_handler(CommandHandler("addpj", add_pj))
+    dp.add_handler(CommandHandler("delpj", del_pj))
+
+    dp.add_handler(CommandHandler("addrules", add_rules))
+    dp.add_handler(CommandHandler("delrules", del_rules))
+
+    dp.add_handler(CallbackQueryHandler(button_handler))
+
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_private))
+
+    client.start()
+    print("✅ Telethon nyala")
+
+    t = threading.Thread(target=tagall_worker)
+    t.daemon = True
+    t.start()
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
